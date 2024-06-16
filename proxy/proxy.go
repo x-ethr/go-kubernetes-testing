@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"strconv"
+	"time"
 )
 
 type Settings struct {
@@ -28,17 +30,26 @@ type Proxy struct {
 	options *Settings
 }
 
+func (p *Proxy) Process() *os.Process {
+	if p.cmd != nil {
+		return p.cmd.Process
+	}
+
+	return nil
+}
+
 func (p *Proxy) Start(ctx context.Context) {
+	defer time.Sleep(time.Millisecond * 250)
+
 	arguments := []string{
 		"proxy",
-		"port",
+		"--port",
 		strconv.Itoa(p.options.Port),
 	}
 
 	arguments = append(arguments, p.options.Arguments...)
 
 	p.cmd = exec.CommandContext(ctx, "kubectl", arguments...)
-
 	if e := p.cmd.Start(); e != nil {
 		slog.ErrorContext(ctx, "Failed to Start Kubectl Proxy", slog.String("error", e.Error()))
 
