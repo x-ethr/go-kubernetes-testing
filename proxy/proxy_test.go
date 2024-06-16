@@ -32,11 +32,9 @@ func Test(t *testing.T) {
 		instance := New()
 
 		instance.Start(ctx)
-		defer instance.Stop(ctx)
-
-		// defer t.Cleanup(func() {
-		// 	instance.Stop(ctx)
-		// })
+		defer t.Cleanup(func() {
+			instance.Stop(ctx)
+		})
 
 		if instance.Process() == nil {
 			t.Fatalf("Instance Command Process is nil")
