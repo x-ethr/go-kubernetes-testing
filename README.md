@@ -19,39 +19,71 @@ go get -u github.com/x-ethr/go-kubernetes-testing
 `main.go`
 
 ```go
-package main
+package main_test
 
 import (
-	"context"
-	"fmt"
+    "context"
+    "encoding/json"
+    "fmt"
+    "io"
+    "log/slog"
+    "net/http"
+    "strconv"
+    "testing"
 
-	"github.com/x-ethr/go-kubernetes-testing"
+    "github.com/x-ethr/levels"
 )
 
-func main() {
-	ctx := context.Background()
+func Test(t *testing.T) {
+    ctx := context.Background()
+    slog.SetLogLoggerLevel(levels.Trace)
+    t.Run("New", func(t *testing.T) {
+        t.Run("Default-Port", func(t *testing.T) {
+            instance := New()
 
-	instance := secrets.New()
-	if e := instance.Walk(ctx, "/etc/secrets"); e != nil {
-		panic(e)
-	}
+            if instance == nil {
+                t.Fatalf("Instance is nil")
+            } else if instance.options.Port != 8080 {
+                t.Fatalf("Instance options port should be 8080, is %d", instance.options.Port)
+            }
+        })
+    })
 
-	for secret, keys := range instance {
-		for key, value := range keys {
-			fmt.Println("Secret", secret, "Key", key, "Value", value)
-		}
-	}
+    t.Run("Start", func(t *testing.T) {
+        instance := New()
 
-	service := instance["service"]
+        instance.Start(ctx)
+        defer t.Cleanup(func() {
+            instance.Stop(ctx)
+        })
 
-	port := service["port"]
-	hostname := service["hostname"]
-	username := service["username"]
-	password := service["password"]
+        if instance.Process() == nil {
+            t.Fatalf("Instance Command Process is nil")
+        }
 
-	fmt.Println("Port", port, "Hostname", hostname, "Username", username, "Password", password)
+        client := http.Client{}
+        response, e := client.Get(fmt.Sprintf("http://localhost:%s/api/v1/namespaces", strconv.Itoa(instance.options.Port)))
+        if e != nil {
+            t.Fatalf("Unable to Call Proxied Namespaces API Endpoint: %v", e)
+        }
+        defer response.Body.Close()
+        if response.StatusCode != 200 {
+            t.Fatalf("Proxied Namespaces API Endpoint Returned Status Code: %d", response.StatusCode)
+        }
+
+        content, e := io.ReadAll(response.Body)
+        if e != nil {
+            t.Fatalf("Unable to Read Proxied Namespaces API Response Body: %v", e)
+        }
+
+        var structure map[string]interface{}
+        if e := json.Unmarshal(content, &structure); e != nil {
+            t.Fatalf("Unable to Unmarshal Proxied Namespaces API Response Body: %v", e)
+        }
+
+        t.Logf("Successfully Unmarshaled Proxied Namespaces API Response Body: %+v", structure)
+    })
 }
-
 ```
 
 - Please refer to the [code examples](./example_test.go) for additional usage and implementation details.
